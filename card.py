@@ -1,10 +1,5 @@
 VALUES = ['6', '7', '8', '9', '10', 'В', 'Д', 'К', 'Т']
-SUITS = {               # масти
-    'hearts': '♥',      # черви
-    'clubs': '♣',       # трефы / крести
-    'diamonds': '♦',    # бубны
-    'spades': '♠'       # пики
-}
+SUITS = ['♥', '♣', '♦', '♠']
 
 class Card:
     def __init__(self, value, suit):
@@ -26,7 +21,7 @@ class Card:
         return VALUES.index(self.get_value()) < VALUES.index(other.get_value())
 
     def __eq__(self, other):
-        return self.value == other.value
+        return self.get_value() == other.get_value() and self.get_suit() == other.get_suit()
 
     def can_beat(self, other):
         if self.is_trump() and not other.is_trump():
@@ -34,6 +29,9 @@ class Card:
         elif self.get_suit() == other.get_suit():
             return VALUES.index(self.get_value()) > VALUES.index(other.get_value())
         return False
+
+    def equal(self, other):
+        return self.get_value() == other.get_value()
 
     def __str__(self):
         return f'{self.value}{self.suit}'
@@ -65,7 +63,7 @@ class Suit:
         return self.suit == other.suit
 
     def __str__(self):
-        return SUITS[self.suit]
+        return self.suit
 
 
 
