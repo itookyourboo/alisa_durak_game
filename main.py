@@ -58,8 +58,9 @@ def handle_dialog(res, req):
                 sessionStorage[user_id]['deck'] = game_deck[12:]
                 sessionStorage[user_id]['trump'] = game_deck[-1]  # Не Дональд!
                 sessionStorage[user_id]['trump'].set_trump()
-                sessionStorage[user_id]['on_table'] = [[], []]   # В первом списке покрываемые, во втором кроющие
+                sessionStorage[user_id]['on_table'] = {}   # В первом списке покрываемые, во втором кроющие
                 sessionStorage[user_id]['player_gives'] = False
+                sessionStorage[user_id]['covering_card'] = None
                 alice_trump, sessionStorage[user_id]['player_gives'] = is_humane_first(
                     sessionStorage[user_id]['alice_cards'], sessionStorage[user_id]['player_cards'])
 
@@ -110,17 +111,17 @@ def play_game(res, req):
     game_info = sessionStorage[req['session']['user_id']]
     if game_info['player_gives']:
         # Тут игрок кидает карты Алисе
-        if req['request']['original_utterance'].lower() == 'не добавлять' and game_info['on_table'][0]:
+        if req['request']['original_utterance'].lower() == 'не добавлять' and game_info['on_table']:
             cover_cards(res, req)
             return 
 
         # TODO: добавить except IndexError для строки ниже
-        card = Card(req['request']['command'][0], game_info['suits'][req['request']['command'][1]])
+        card = Card(req['request']['command'][:-1], game_info['suits'][req['request']['command'][-1]])
         if card in game_info['player_cards']:
-            if not game_info['on_table'][0] or game_info['on_table'][0][0].equal(card):
-                game_info['on_table'][0].append(card)
+            if not game_info['on_table'] or list(game_info['on_table'])[0].equal(card):
+                game_info['on_table'][card] = None
                 game_info['player_cards'].remove(card)
-                equal_cards = find_equals(game_info['on_table'][0][0], game_info['player_cards'])
+                equal_cards = find_equals(list(game_info['on_table'])[0], game_info['player_cards'])
                 if equal_cards:
                     res['response']['text'] = 'Добавите еще карту?'
                     res['response']['buttons'] = [{'title': str(card), 'hide': True} for card in
@@ -131,34 +132,148 @@ def play_game(res, req):
             res['response']['text'] = 'Такой карты нет. Попробуйте еще раз.'
             res['response']['buttons'] = [{'title': str(card), 'hide': True} for card in
                                           (game_info['player_cards']
-                                           if not game_info['on_table'][0] else
-                                           find_equals(game_info['on_table'][0][0],
+                                           if not game_info['on_table'] else
+                                           find_equals(list(game_info['on_table'])[0],
                                                        game_info['player_cards']) + ['Не добалять'])]
 
     else:
-        # Тут игрок покрывает карты Алисы
-        res['response']['text'] = 'Ветка "игрок кроет"'
+        if 'взять' in req['request']['nlu']['tokens']:
+            game_info['player_cards'] += [i for item in game_info['on_table'].items() for i in item if i is not None]
 
+            if take_new_cards(res, req, [game_info['alice_cards']]):
+                return
+            give_cards(res, req)
+        elif 'сброс' in req['request']['nlu']['tokens']:
+            game_info['player_cards'] += [card for card in game_info['on_table'].values() if card is not None]
+            res['response']['text'] = ' '.join(map(str, game_info['on_table'])) + '\n' + 'Какую карту будете крыть?'
+            res['response']['buttons'] = [{'title': str(card), 'hide': True} for card in
+                                           ['Взять', 'Сброс']]
+        else:
+            card = Card(req['request']['command'][:-1], game_info['suits'][req['request']['command'][-1]])
+            if card in game_info['on_table']:
+                game_info['covering_card'] = card
+                res['response']['text'] = f'Выбрана карта {card}. Чем будете крыть?'
+                res['response']['buttons'] = [{'title': str(c), 'hide': True} for c in
+                                              find_bigger(card, game_info['player_cards']) + ['Взять', 'Сброс']]
+            elif card in game_info['player_cards']:
+                if card.can_beat(game_info['covering_card']):
+                    if game_info['on_table'][game_info['covering_card']] is not None:
+                        game_info['player_cards'].append(game_info['on_table'][game_info['covering_card']])
+                    game_info['on_table'][game_info['covering_card']] = card
+                    game_info['player_cards'].remove(card)
+                    game_info['covering_card'] = None
+                    remain = [covering_c for covering_c, c in game_info['on_table'].items() if c is None]
+                    if not remain:
+
+                        res['response']['text'] = 'Бита. Ваш ход.'
+                        game_info['player_gives'] = True
+                        if take_new_cards(res, req,
+                                       [game_info['alice_cards'], game_info['player_cards']]):
+                            return
+                        res['response']['buttons'] = [{'title': str(c), 'hide': True} for c in
+                                                        game_info['player_cards']]
+
+                    elif len(remain) > 1:
+                        res['response']['text'] = 'Какую дальше карту будете крыть?'
+                        res['response']['buttons'] = [{'title': str(card), 'hide': True} for card in
+                                                      remain + ['Cброс', 'Взять']]
+                    else:
+                        game_info['covering_card'] = remain[0]
+                        res['response']['text'] = f'Осталось покрыть {remain[0]}'
+                        res['response']['buttons'] = [{'title': str(c), 'hide': True} for c in
+                                                      find_bigger(remain[0], game_info['player_cards']) + ['Взять', 'Сброс']]
+                else:
+                    res['response']['text'] = f'Эта карта не может покрыть {game_info["covering_card"]}'
+                    res['response']['buttons'] = [{'title': str(c), 'hide': True} for c in
+                                                  find_bigger(game_info["covering_card"], game_info['player_cards'])]
+            else:
+                res['response']['text'] = 'Такой карты нет'
+                if game_info['covering_card'] is None:
+                    remain = [covering_c for covering_c, c in game_info['on_table'].items() if
+                              c is None]
+                    res['response']['buttons'] = [{'title': str(card), 'hide': True} for card in
+                                                  remain + ['Cброс', 'Взять']]
+                else:
+                    res['response']['buttons'] = [{'title': str(c), 'hide': True} for c in
+                                                  find_bigger(game_info['covering_card'], game_info['player_cards'])]
 
 
 def give_cards(res, req):
     game_info = sessionStorage[req['session']['user_id']]
     min_card = min(game_info['alice_cards'])
-    game_info['on_table'][0] = find_equals(min_card, game_info['alice_cards'])
-    [game_info['alice_cards'].remove(card) for card in game_info['on_table'][0]]
-    res['response']['text'] += ' '.join(map(str, game_info['on_table'][0])) + '\n'
-    res['response']['buttons'] = [{'title': str(card), 'hide': True} for card in
-                                  game_info['player_cards']]
+    game_info['on_table'] = {key: None for key in find_equals(min_card, game_info['alice_cards'])}
+    [game_info['alice_cards'].remove(card) for card in game_info['on_table']]
+    res['response']['text'] = res['response'].get('text', '') + ' '.join(map(str, game_info['on_table'])) + '\n'
+    if len(game_info['on_table']) > 1:
+        res['response']['text'] += 'Какую карту будете крыть?'
+        res['response']['buttons'] = [{'title': str(card), 'hide': True} for card in
+                                      list(game_info['on_table']) + ['Cброс']]
+    else:
+        game_info['covering_card'] = list(game_info['on_table'])[0]
+        
+        res['response']['buttons'] = [{'title': str(c), 'hide': True} for c in
+                                      find_bigger(list(game_info['on_table'])[0],
+                                                  game_info['player_cards'])]
+
+    res['response']['buttons'] += [{'title': 'Взять', 'hide': True}]
     game_info['player_gives'] = False
 
 
 def cover_cards(res, req):
     # Функция будет крыть карты игрока и вызывать give_cards или брать карты
-    res['response']['text'] = 'Пока не умею крыть.'
+    game_info = sessionStorage[req['session']['user_id']]
+    for covering_card in game_info['on_table']:
+        bigger_cards = find_bigger(covering_card, game_info['alice_cards'])
+        if bigger_cards:
+            card = min(bigger_cards)
+            game_info['on_table'][covering_card] = card
+            game_info['alice_cards'].remove(card)
+        else:
+            res['response']['text'] = 'Беру'
+            game_info['alice_cards'] += [i for item in game_info['on_table'].items() for i in item
+                                          if i is not None]
+            if take_new_cards(res, req, [game_info['player_cards']]):
+                return
+            res['response']['buttons'] = [{'title': str(c), 'hide': True} for c in
+                                          game_info['player_cards']]
+            game_info['player_gives'] = True
+            return
+    res['response']['text'] = 'Покрыла: ' + ' '.join(map(str, game_info['on_table'].values())) + '\n'
+    if take_new_cards(res, req, [game_info['player_cards'], game_info['alice_cards']]):
+        return
+    give_cards(res, req)
+
+def take_new_cards(res, req, takers):
+    game_info = sessionStorage[req['session']['user_id']]
+    for taker in takers:
+        number_of_cards = max(0, 6 - len(taker))
+        taker += game_info['deck'][:number_of_cards]
+        game_info['deck'] = game_info['deck'][number_of_cards:]
+    game_info['on_table'].clear()
+    game_info['covering_card'] = None
+    return check_win(res, req)
+
+
+def check_win(res, req):
+    game_info = sessionStorage[req['session']['user_id']]
+    if game_info['alice_cards'] and game_info['player_cards']:
+        return False
+    if not (game_info['alice_cards'] or game_info['player_cards']):
+        res['response']['text'] = 'ничья'
+    elif not game_info['alice_cards']:
+        res['response']['text'] = 'я победила'
+    elif not game_info['player_cards']:
+        res['response']['text'] = 'вы победили'
+    res['response']['end_session'] = True
+    return True
 
 
 def find_equals(card, cards_arr):
     return [c for c in cards_arr if card.equal(c)]
+
+
+def find_bigger(card, cards_arr):
+    return [c for c in cards_arr if c.can_beat(card)]
 
 
 if __name__ == '__main__':

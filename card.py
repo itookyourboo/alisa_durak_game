@@ -1,6 +1,7 @@
 VALUES = ['6', '7', '8', '9', '10', 'В', 'Д', 'К', 'Т']
 SUITS = ['♥', '♣', '♦', '♠']
 
+
 class Card:
     def __init__(self, value, suit):
         self.value = value
@@ -23,6 +24,12 @@ class Card:
     def __eq__(self, other):
         return self.get_value() == other.get_value() and self.get_suit() == other.get_suit()
 
+    def __str__(self):
+        return f'{self.value}{self.suit}'
+
+    def __hash__(self):
+        return VALUES.index(self.value) * len(SUITS) + SUITS.index(str(self.suit))
+
     def can_beat(self, other):
         if self.is_trump() and not other.is_trump():
             return True
@@ -32,9 +39,6 @@ class Card:
 
     def equal(self, other):
         return self.get_value() == other.get_value()
-
-    def __str__(self):
-        return f'{self.value}{self.suit}'
 
     def get_value(self):
         return self.value
@@ -47,6 +51,7 @@ class Card:
 
     def set_trump(self):
         self.suit.set_trump()
+
 
 class Suit:
     def __init__(self, suit):
@@ -64,9 +69,6 @@ class Suit:
 
     def __str__(self):
         return self.suit
-
-
-
 
 # while True:
 #     v1, s1, v2, s2 = input().split()
