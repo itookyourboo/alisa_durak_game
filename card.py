@@ -43,6 +43,9 @@ class Card:
     def get_value(self):
         return self.value
 
+    def get_value_index(self):
+        return VALUES.index(self.value)
+
     def get_suit(self):
         return self.suit
 
