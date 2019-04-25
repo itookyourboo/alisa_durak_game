@@ -222,7 +222,18 @@ def give_cards(res, req):
     # TODO: не давать игроку больше карт, чем у него есть
     game_info = sessionStorage[req['session']['user_id']]
     min_card = min(game_info['alice_cards'])
-    game_info['on_table'] = {key: None for key in find_equals(min_card, game_info['alice_cards'])}
+    alice_cost = sum(map(lambda x: x.get_cost(), game_info['alice_cards']))
+    equals = find_equals(min_card, game_info['alice_cards'])
+    if len(game_info['deck']) > 6 and min_card.get_cost() <= 0:
+        game_info['on_table'] = {key: None for key in equals if not key.is_trump() or choice([True, False]) and not key.is_trump()}
+    elif len(game_info['deck']) <= 6 and min_card.get_cost() <= 0:
+        game_info['on_table'] = {key: None for key in equals}
+    elif len(game_info['deck']) > 6 and min_card.get_cost() > 0:
+        game_info['on_table'] = {key: None for key in equals if not key.is_trump()}
+    else:
+        game_info['on_table'] = {key: None for key in equals if
+                                 not key.is_trump() or choice([True, False]) and not key.is_trump()}
+
     [game_info['alice_cards'].remove(card) for card in game_info['on_table']]
     res['response']['text'] = res['response'].get('text', '') + ' '.join(map(str, game_info['on_table'])) + '\n'
     if len(game_info['on_table']) > 1:
@@ -247,10 +258,32 @@ def cover_cards(res, req):
     game_info = sessionStorage[req['session']['user_id']]
     for covering_card in game_info['on_table']:
         bigger_cards = [c for c in game_info['alice_cards'] if c.can_beat(covering_card)]
+        # Если разность стоимости больше 120, то берем
         if bigger_cards:
-            card = min(bigger_cards)
-            game_info['on_table'][covering_card] = card
-            game_info['alice_cards'].remove(card)
+            min_big = min(bigger_cards)
+            if len(game_info['deck']) > 6:
+                if len(bigger_cards) > 1 and min_big.get_cost() <= covering_card.get_cost() + 120:
+                    card = min_big
+                    game_info['on_table'][covering_card] = card
+                    game_info['alice_cards'].remove(card)
+                elif len(bigger_cards) == 1 and min_big.get_cost() <= covering_card.get_cost() + 100:
+                    card = min_big
+                    game_info['on_table'][covering_card] = card
+                    game_info['alice_cards'].remove(card)
+                else:
+                    res['response']['text'] = 'Беру'
+                    game_info['alice_cards'] += [i for item in game_info['on_table'].items() for i in item
+                                                 if i is not None]
+                    if take_new_cards(res, req, [game_info['player_cards']]):
+                        return
+                    res['response']['buttons'] = [{'title': str(c), 'hide': True} for c in
+                                                  sort_cards(game_info['player_cards'])]
+                    game_info['player_gives'] = True
+                    return
+            else:
+                card = min_big
+                game_info['on_table'][covering_card] = card
+                game_info['alice_cards'].remove(card)
         else:
             res['response']['text'] = 'Беру'
             game_info['alice_cards'] += [i for item in game_info['on_table'].items() for i in item

@@ -40,6 +40,9 @@ class Card:
     def equal(self, other):
         return self.get_value() == other.get_value()
 
+    def get_cost(self):
+        return 100 * (self.get_value_index() - 4) + (90 if self.is_trump() else 0)
+
     def get_value(self):
         return self.value
 
