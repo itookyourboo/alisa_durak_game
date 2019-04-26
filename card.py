@@ -1,8 +1,11 @@
+# Достоинства и масти
 VALUES = ['6', '7', '8', '9', '10', 'В', 'Д', 'К', 'Т']
 SUITS = ['♥', '♣', '♦', '♠']
+SUITS_NAMES = ['черви', 'трефы', 'бубны', 'пики']
 
 
 class Card:
+    # Модель карты
     def __init__(self, value, suit):
         if value not in VALUES or str(suit) not in SUITS:
             raise ValueError("Неправильная масть или значение")
@@ -44,7 +47,8 @@ class Card:
         return self.get_value() == other.get_value()
 
     def get_cost(self):
-        return 100 * (self.get_value_index() - 4) + (90 if self.is_trump() else 0)
+        # Рассчитывает стоимость карты
+        return 10 * (self.get_value_index() - 4) + (90 if self.is_trump() else 0)
 
     def get_value(self):
         return self.value
@@ -55,6 +59,9 @@ class Card:
     def get_suit(self):
         return self.suit
 
+    def get_suit_name(self):
+        return SUITS_NAMES[SUITS.index(str(self.suit))]
+
     def is_trump(self):
         return self.suit.is_trump()
 
@@ -63,6 +70,7 @@ class Card:
 
 
 class Suit:
+    # Модель масти
     def __init__(self, suit):
         self.suit = suit
         self.trump = False
@@ -78,8 +86,3 @@ class Suit:
 
     def __str__(self):
         return self.suit
-
-# while True:
-#     v1, s1, v2, s2 = input().split()
-#     c1, c2 = Card(v1, s1), Card(v2, s2)
-#     print(c1, ('>' if c1 > c2 else ('<' if c1 < c2 else '=')), c2)
