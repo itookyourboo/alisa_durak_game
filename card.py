@@ -4,6 +4,8 @@ SUITS = ['♥', '♣', '♦', '♠']
 
 class Card:
     def __init__(self, value, suit):
+        if value not in VALUES or str(suit) not in SUITS:
+            raise ValueError("Неправильная масть или значение")
         self.value = value
         self.suit = suit
 
@@ -22,7 +24,8 @@ class Card:
         return VALUES.index(self.get_value()) < VALUES.index(other.get_value())
 
     def __eq__(self, other):
-        return self.get_value() == other.get_value() and self.get_suit() == other.get_suit()
+        return isinstance(self, Card) and isinstance(other, Card) and \
+               self.get_value() == other.get_value() and self.get_suit() == other.get_suit()
 
     def __str__(self):
         return f'{self.value}{self.suit}'
