@@ -3,6 +3,7 @@ from flask import Flask, request
 import logging
 import json
 from random import shuffle, choice
+from copy import deepcopy
 
 HELP_TXT = '''Дурак - это карточная игра. В ней используется колода из 36 карт.
 Каждая карта имеет масть (♥, ♣, ♦, ♠) и достоинство (6, 7, 8, 9, 10, В, Д, К, Т).
@@ -12,6 +13,9 @@ HELP_TXT = '''Дурак - это карточная игра. В ней исп�
 
 Мы играем в простого дурака - за один ход можно дать одну или несколько карт одного достоинства.
 Ну что, поехали?'''
+
+WHAT_CAN_YOU_DO = 'Я могу сыграть с тобой в "Дурака". Мой интеллект позволяет мне делать ' \
+                  'логичные ходы - крыть и давать карты.'
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 sessionStorage = {}
@@ -43,10 +47,6 @@ def handle_dialog(res, req):
                 'hide': True
             },
             {
-                'title': 'Помощь',
-                'hide': True
-            },
-            {
                 'title': 'Выход',
                 'hide': True
             }
@@ -58,7 +58,18 @@ def handle_dialog(res, req):
     else:
         # В sessionStorage[user_id]['game_started'] хранится True или False в зависимости от того,
         # начал пользователь игру или нет.
-        if not sessionStorage[user_id]['game_started']:
+        if any(word in req['request']['nlu']['tokens'] for word in ['помощь', 'правила', 'помоги']):
+            res['response']['text'] = HELP_TXT
+        # выйти из игры
+        elif any(word in req['request']['nlu']['tokens'] for word in ['умеешь', 'делать', 'можешь',
+                                                                      'что']):
+            res['response']['text'] = WHAT_CAN_YOU_DO
+        elif any(word in req['request']['nlu']['tokens'] for word in ['выход', 'хватит', 'пока',
+                                                                      'свидания', 'стоп', 'нет',
+                                                                      'выключи', 'останови']):
+            res['response']['text'] = 'Надеюсь, было весело. Пока.'
+            res['response']['end_session'] = True
+        elif not sessionStorage[user_id]['game_started']:
             # игра не начата, значит мы ожидаем ответ на предложение сыграть.
             if any(word in req['request']['nlu']['tokens'] for word in ['играть', 'давай', 'да',
                                                                         'поехали', 'ладно', 'старт',
@@ -93,45 +104,36 @@ def handle_dialog(res, req):
                     give_cards(res, req)
 
             # показать игроку сообщение с помощью
-            elif any(word in req['request']['nlu']['tokens'] for word in ['помощь', 'умеешь',
-                                                                          'правила', 'помоги',
-                                                                          'делать', 'можешь',
-                                                                          'умеешь', 'что']):
-                res['response']['text'] = HELP_TXT
-                res['response']['buttons'] = [
-                    {
-                        'title': 'Играть',
-                        'hide': True
-                    },
-                    {
-                        'title': 'Выход',
-                        'hide': True
-                    }
-                ]
-            # выйти из игры
-            elif any(word in req['request']['nlu']['tokens'] for word in ['выход', 'хватит', 'пока',
-                                                                          'свидания', 'стоп', 'нет',
-                                                                          'выключи', 'останови']):
-                res['response']['text'] = 'Надеюсь, было весело. Пока.'
-                res['response']['end_session'] = True
             else:
                 res['response']['text'] = 'Не поняла ответа!'
-                res['response']['buttons'] = [
-                    {
-                        'title': 'Играть',
-                        'hide': True
-                    },
-                    {
-                        'title': 'Помощь',
-                        'hide': True
-                    },
-                    {
-                        'title': 'Выход',
-                        'hide': True
-                    }
-                ]
         else:
-            play_game(res, req)
+            if any(word in req['request']['nlu']['tokens'] for word in ['козырь', 'козырная',
+                                                                        'какой', 'какая']):
+                res['response']['text'] = 'Козырем является ' + str(
+                    sessionStorage[user_id]['trump'])
+            else:
+                play_game(res, req)
+
+    add_default_buttons(res, user_id)
+
+
+def add_default_buttons(res, user_id):
+    if 'buttons' in res['response']:
+        sessionStorage[user_id]['last_buttons'] = deepcopy(res['response']['buttons'])
+    else:
+        res['response']['buttons'] = deepcopy(sessionStorage[user_id]['last_buttons'])
+    if sessionStorage[user_id]['game_started']:
+        if {'title': 'Козырь', 'hide': True} not in res['response']['buttons']:
+            res['response']['buttons'].append({'title': 'Козырь', 'hide': True})
+        if not sessionStorage[user_id]['player_gives']:
+            if len(sessionStorage[user_id]['on_table']) > 1:
+                res['response']['buttons'].append({'title': 'Сброс', 'hide': True})
+            res['response']['buttons'].append({'title': 'Взять', 'hide': True})
+
+    for button in ['Помощь', 'Что ты умеешь?']:
+        button_dict = {'title': button, 'hide': True}
+        if button_dict not in res['response']['buttons']:
+            res['response']['buttons'].append(button_dict)
 
 
 def is_humane_first(alice_cards, player_cards):
@@ -181,12 +183,6 @@ def play_game(res, req):
                     cover_cards(res, req)
         else:
             res['response']['text'] = 'Такой карты нет. Попробуйте еще раз.'
-            res['response']['buttons'] = [{'title': str(card), 'hide': True} for card in
-                                          (sort_cards(game_info['player_cards'])
-                                           if not game_info['on_table'] else
-                                           sort_cards(find_equals(list(game_info['on_table'])[0],
-                                                                  game_info['player_cards'])) +
-                                           ['Не добалять'])]
 
     else:
         # взятие карт игроком
@@ -203,25 +199,24 @@ def play_game(res, req):
         elif any(word in req['request']['nlu']['tokens'] for word in ['сброс', 'снять', 'вернуть',
                                                                       'сбрось', 'верни', 'отменить',
                                                                       'сними', 'отмена', 'назад']):
-            for card in game_info['on_table']:
-                if game_info['on_table'][card] is not None:
-                    game_info['player_cards'].append(game_info['on_table'][card])
-                    game_info['on_table'][card] = None
-            static_buttons = [] if len(game_info['on_table']) else [{'title': str(card), 'hide': False}
-                                                                    for card in game_info['on_table']]
-            res['response']['text'] = ' '.join(map(str, game_info['on_table'])) + \
-                                      ('\nКакую карту будете крыть?' if len(static_buttons) >= 2 else '')
-            static_buttons = [] if len(game_info['on_table']) else [{'title': str(card), 'hide': False}
-                                          for card in game_info['on_table']]
-            res['response']['buttons'] = static_buttons + \
-                                         [{'title': str(btn), 'hide': True} for btn in
-                                          sort_cards(find_bigger(list(game_info['on_table'])[0],
-                                                                 game_info['player_cards'])) + [
-                                              'Взять']]
-        # elif any(word in req['request']['nlu']['tokens']
-        # for word in ['козырь', 'козырной', 'козырная']):
-        #     res['response']['text'] = f'Козырь - {str(game_info["trump"].get_suit())} ' \
-        #                               f'({game_info["trump"].get_suit_name()})'
+            if len(game_info['on_table']) < 2:
+                res['response']['text'] = 'Нельзя выполнить сброс\n' + \
+                                          str(game_info['covering_card'])
+            else:
+
+                for card in game_info['on_table']:
+                    if game_info['on_table'][card] is not None:
+                        game_info['player_cards'].append(game_info['on_table'][card])
+                        game_info['on_table'][card] = None
+                game_info['covering_card'] = None
+                static_buttons = [{'title': str(card), 'hide': False}
+                                  for card in game_info['on_table']]
+                res['response']['text'] = ' '.join(map(str, game_info['on_table'])) + \
+                                          '\nКакую карту будете крыть?'
+                res['response']['buttons'] = static_buttons + \
+                                             [{'title': str(btn), 'hide': True} for btn in
+                                              sort_cards(find_bigger(list(game_info['on_table'])[0],
+                                                                     game_info['player_cards']))]
         else:
             try:
                 card = Card(req['request']['command'][:-1],
@@ -236,8 +231,7 @@ def play_game(res, req):
                 res['response']['text'] = f'Выбрана карта {card}. Чем будете крыть?'
                 res['response']['buttons'] = [{'title': str(c), 'hide': True} for c in
                                               sort_cards(find_bigger(card,
-                                                                     game_info['player_cards'])) +
-                                              ['Взять', 'Сброс']]
+                                                                     game_info['player_cards']))]
             elif card in game_info['player_cards'] and game_info['covering_card'] is not None:
                 if card.can_beat(game_info['covering_card']):
                     if game_info['on_table'][game_info['covering_card']] is not None:
@@ -266,41 +260,18 @@ def play_game(res, req):
                                                       sort_cards(find_bigger(list(
                                                           game_info['on_table'])[0],
                                                                              game_info[
-                                                                                 'player_cards'])) +
-                                                      ['Взять', 'Сброс']]
+                                                                                 'player_cards']))]
                     else:
                         game_info['covering_card'] = remain[0]
                         res['response']['text'] = f'Осталось покрыть {remain[0]}'
                         res['response']['buttons'] = [{'title': str(c), 'hide': True}
                                                       for c in sort_cards(
-                                find_bigger(remain[0], game_info['player_cards'])) + ['Взять'] +
-                                                      ['Сброс']]
+                                find_bigger(remain[0], game_info['player_cards']))]
                 else:
                     res['response']['text'] = f'Эта карта не может покрыть ' \
                         f'{game_info["covering_card"]}'
-                    res['response']['buttons'] = [{'title': str(c), 'hide': True} for c in
-                                                  sort_cards(find_bigger(game_info["covering_card"],
-                                                                         game_info['player_cards']))
-                                                  + ['Взять'] + (['Сброс'] if
-                                                                 len(game_info['on_table']) > 1
-                                                                 else [])]
             else:
                 res['response']['text'] = 'Такой карты нет'
-                if game_info['covering_card'] is None:
-                    remain = [covering_c for covering_c, c in game_info['on_table'].items()
-                              if c is None]
-                    res['response']['buttons'] = [{'title': str(card), 'hide': False}
-                                                  for card in remain] + \
-                                                 [{'title': str(btn), 'hide': True}
-                                                  for btn in sort_cards(
-                                                     find_bigger(list(game_info['on_table'])[0],
-                                                                 game_info['player_cards'])) +
-                                                  ['Взять']]
-                else:
-                    res['response']['buttons'] = [{'title': str(c), 'hide': True} for c in
-                                                  sort_cards(find_bigger(game_info['covering_card'],
-                                                                         game_info['player_cards']))
-                                                  ]
 
 
 def give_cards(res, req):
@@ -342,7 +313,7 @@ def give_cards(res, req):
                                       sort_cards(find_bigger(list(game_info['on_table'])[0],
                                                              game_info['player_cards']))]
 
-    res['response']['buttons'] += [{'title': 'Взять', 'hide': True}]
+    # res['response']['buttons'] += [{'title': 'Взять', 'hide': True}]
     game_info['player_gives'] = False
 
 
@@ -428,10 +399,6 @@ def check_win(res, req):
     res['response']['buttons'] = [
         {
             'title': 'Играть',
-            'hide': True
-        },
-        {
-            'title': 'Помощь',
             'hide': True
         },
         {
