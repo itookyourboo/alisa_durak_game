@@ -31,7 +31,10 @@ def main():
             'end_session': False
         }
     }
-    handle_dialog(response, request.json)
+    req = request.json
+    normalize_command(req)
+    logging.info('command = ' + req['request']['command'])
+    handle_dialog(response, req)
     logging.info('Response: %r', response)
     normalize_tts(response)
     return json.dumps(response)
@@ -273,6 +276,8 @@ def play_game(res, req):
                         f'{game_info["covering_card"]}'
             else:
                 res['response']['text'] = 'Такой карты нет'
+                if len(game_info['on_table']) > 1 and game_info['covering_card'] is None:
+                    res['response']['text'] += '\nВыберите, какую будете крыть'
 
 
 def give_cards(res, req):
@@ -428,11 +433,24 @@ def sort_cards(cards_arr):
 
 
 def normalize_tts(res):
-    res['response']['tts'] = res['response']['text']
+    res['response']['tts'] = res['response']['text'].replace('\n', '\n ')
     for comb in combs:
         if comb not in res['response']['tts']:
             continue
         res['response']['tts'] = res['response']['tts'].replace(comb, combs[comb])
+
+
+def normalize_command(req):
+    req['request']['command'] = ''.join(
+        req['request']['command'].lower().replace('.', '').strip().split()).replace('ё', 'е')
+    to_replace = {'♥': ['червы', 'черви', 'лиры', 'любовные', 'сердце'],
+                  '♣': ['трефы', 'крести', 'кресты', 'жёлуди'],
+                  '♦': ['бубны', 'буби', 'бубни', 'даки', 'звонки', 'ромби'],
+                  '♠': ['пики', 'вини', 'вины', 'виньни', 'бурячок']}
+    for symbol, words in {**to_replace, **value_names}.items():
+        for word in words:
+            req['request']['command'] = req['request']['command'].replace(word.replace('ё', 'е'),
+                                                                          symbol)
 
 
 if __name__ == '__main__':
