@@ -33,6 +33,7 @@ def main():
     }
     handle_dialog(response, request.json)
     logging.info('Response: %r', response)
+    normalize_tts(response)
     return json.dumps(response)
 
 
@@ -297,7 +298,7 @@ def give_cards(res, req):
         game_info['on_table'] = {key: None for key in sort_cards(cards)[:min(p_len, len(cards))]}
 
     [game_info['alice_cards'].remove(card) for card in game_info['on_table']]
-    res['response']['text'] = res['response'].get('text', '') + ' '.join(
+    res['response']['text'] = res['response'].get('text', '') + 'Кройте: ' + ' '.join(
         map(str, game_info['on_table'])) + '\n'
     if len(game_info['on_table']) > 1:
         res['response']['text'] += 'Какую карту будете крыть?'
@@ -364,7 +365,7 @@ def cover_cards(res, req):
                                           sort_cards(game_info['player_cards'])]
             game_info['player_gives'] = True
             return
-    res['response']['text'] = 'Покрыла: ' + ' '.join(map(str, game_info['on_table'].values())) + \
+    res['response']['text'] = ' '.join(map(str, game_info['on_table'].values())) + \
                               '\n'
     if take_new_cards(res, req, [game_info['player_cards'], game_info['alice_cards']]):
         return

@@ -14,12 +14,12 @@ value_names = {
 }
 
 suit_names = {
-    '♥': 'черви',
-    '♣': 'крести',
-    '♦': 'буби',
-    '♠': 'пики'
+    '♥': 'ч+ерви',
+    '♣': 'кр+ести',
+    '♦': 'б+уби',
+    '♠': 'п+ики'
 }
-combs = {v + s: v1 + s1 for v, v1 in value_names for s, s1 in suit_names}
+combs = {v + s: v1 + ' ' + s1 for v, v1 in value_names.items() for s, s1 in suit_names.items()}
 
 
 class Card:
