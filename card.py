@@ -1,7 +1,25 @@
 # Достоинства и масти
 VALUES = ['6', '7', '8', '9', '10', 'В', 'Д', 'К', 'Т']
 SUITS = ['♥', '♣', '♦', '♠']
-SUITS_NAMES = ['черви', 'трефы', 'бубны', 'пики']
+value_names = {
+    '6': 'шестёрка',
+    '7': 'семёрка',
+    '8': 'восьмёрка',
+    '9': 'девятка',
+    '10': 'десятка',
+    'В': 'валет',
+    'Д': 'дама',
+    'К': 'король',
+    'Т': 'туз'
+}
+
+suit_names = {
+    '♥': 'черви',
+    '♣': 'крести',
+    '♦': 'буби',
+    '♠': 'пики'
+}
+combs = {v + s: v1 + s1 for v, v1 in value_names for s, s1 in suit_names}
 
 
 class Card:
@@ -60,7 +78,7 @@ class Card:
         return self.suit
 
     def get_suit_name(self):
-        return SUITS_NAMES[SUITS.index(str(self.suit))]
+        return suit_names[str(self.suit)]
 
     def is_trump(self):
         return self.suit.is_trump()

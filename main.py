@@ -426,5 +426,13 @@ def sort_cards(cards_arr):
     return sorted(cards_arr, key=lambda x: (x.is_trump(), x.get_value_index()))
 
 
+def normalize_tts(res):
+    res['response']['tts'] = res['response']['text']
+    for comb in combs:
+        if comb not in res['response']['tts']:
+            continue
+        res['response']['tts'] = res['response']['tts'].replace(comb, combs[comb])
+
+
 if __name__ == '__main__':
     app.run()
