@@ -16,6 +16,12 @@ HELP_TXT = '''Дурак - это карточная игра. В ней исп�
 
 WHAT_CAN_YOU_DO = 'Я могу сыграть с тобой в "Дурака". Мой интеллект позволяет мне делать ' \
                   'логичные ходы - крыть и давать карты.'
+MODES = {
+    'SIMPLE': ('простой', 'в простого'),
+    'FLUSH': ('подкидной', 'в подкидного'),
+    'TRANSFERABLE': ('переводной', 'в переводного'),
+    'TWO_TRUMPS': ('двойной козырь', 'с двойным козырем', 'два козыря', 'с двумя козырями')
+}
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 sessionStorage = {}
@@ -74,42 +80,33 @@ def handle_dialog(res, req):
             res['response']['text'] = 'Надеюсь, было весело. Пока.'
             res['response']['end_session'] = True
         elif not sessionStorage[user_id]['game_started']:
-            # игра не начата, значит мы ожидаем ответ на предложение сыграть.
-            if any(word in req['request']['nlu']['tokens'] for word in ['играть', 'давай', 'да',
-                                                                        'поехали', 'ладно', 'старт',
-                                                                        'ок', 'хорошо', 'запуск',
-                                                                        'запускай']):
-                # раздача карт
+            if 'mode' not in sessionStorage[user_id]:
+                # игра не начата, значит мы ожидаем ответ на предложение сыграть.
+                if any(word in req['request']['nlu']['tokens'] for word in ['играть', 'давай', 'да',
+                                                                            'поехали', 'ладно', 'старт',
+                                                                            'ок', 'хорошо', 'запуск',
+                                                                            'запускай']):
+                    res['response']['text'] = 'Выбери режим игры'
+                    res['response']['buttons'] = [
+                        {
+                            'title': MODES[mode][0].capitalize(),
+                            'hide': True
+                        } for mode in MODES
+                    ]
+                    sessionStorage[user_id]['mode'] = None
+                else:
+                    res['response']['text'] = 'Не поняла ответа!'
+            elif sessionStorage[user_id]['mode'] is None:
+                for mode in MODES:
+                    if any(word in req['request']['nlu']['tokens'] for word in MODES[mode]):
+                        sessionStorage[user_id]['choose_mode'] = False
+                        sessionStorage[user_id]['mode'] = mode
 
-                sessionStorage[user_id]['game_started'] = True
-                sessionStorage[user_id]['suits'] = {s: Suit(s) for s in SUITS}
-
-                game_deck = [Card(v, s) for v in VALUES
-                             for s in sessionStorage[user_id]['suits'].values()]
-                shuffle(game_deck)
-                sessionStorage[user_id]['trump'] = game_deck[-1]  # Не Дональд!
-                sessionStorage[user_id]['trump'].set_trump()
-                sessionStorage[user_id]['alice_cards'] = game_deck[:6]
-                sessionStorage[user_id]['player_cards'] = sort_cards(game_deck[6:12])
-                sessionStorage[user_id]['deck'] = game_deck[12:]
-                sessionStorage[user_id]['on_table'] = {}
-                sessionStorage[user_id]['player_gives'] = False
-                sessionStorage[user_id]['covering_card'] = None
-                alice_trump, sessionStorage[user_id]['player_gives'] = is_humane_first(
-                    sessionStorage[user_id]['alice_cards'], sessionStorage[user_id]['player_cards'])
-
-                res['response']['text'] = 'Козырь: {}\n{}, {}.\n'.format(
-                    sessionStorage[user_id]["trump"], alice_trump,
-                    ("вы ходите" if sessionStorage[user_id]["player_gives"] else
-                     "поэтому я хожу первой"))
-                res['response']['buttons'] = [{'title': str(card), 'hide': True} for card in
-                                              sessionStorage[user_id]['player_cards']]
-                if not sessionStorage[user_id]['player_gives']:
-                    give_cards(res, req)
-
-            # показать игроку сообщение с помощью
+                        distribution(user_id, res, req)
+                        return
+                res['response']['text'] = 'Такого режима нет'
             else:
-                res['response']['text'] = 'Не поняла ответа!'
+                res['response']['text'] = 'Режим уже выбран'
         else:
             if any(word in req['request']['nlu']['tokens'] for word in ['козырь', 'козырная',
                                                                         'какой', 'какая']):
@@ -414,6 +411,34 @@ def check_win(res, req):
     ]
     game_info['game_started'] = False
     return True
+
+
+def distribution(user_id, res, req):
+    sessionStorage[user_id]['game_started'] = True
+    sessionStorage[user_id]['suits'] = {s: Suit(s) for s in SUITS}
+
+    game_deck = [Card(v, s) for v in VALUES
+                 for s in sessionStorage[user_id]['suits'].values()]
+    shuffle(game_deck)
+    sessionStorage[user_id]['trump'] = game_deck[-1]  # Не Дональд!
+    sessionStorage[user_id]['trump'].set_trump()
+    sessionStorage[user_id]['alice_cards'] = game_deck[:6]
+    sessionStorage[user_id]['player_cards'] = sort_cards(game_deck[6:12])
+    sessionStorage[user_id]['deck'] = game_deck[12:]
+    sessionStorage[user_id]['on_table'] = {}
+    sessionStorage[user_id]['player_gives'] = False
+    sessionStorage[user_id]['covering_card'] = None
+    alice_trump, sessionStorage[user_id]['player_gives'] = is_humane_first(
+        sessionStorage[user_id]['alice_cards'], sessionStorage[user_id]['player_cards'])
+
+    res['response']['text'] = 'Козырь: {}\n{}, {}.\n'.format(
+        sessionStorage[user_id]["trump"], alice_trump,
+        ("вы ходите" if sessionStorage[user_id]["player_gives"] else
+         "поэтому я хожу первой"))
+    res['response']['buttons'] = [{'title': str(card), 'hide': True} for card in
+                                  sessionStorage[user_id]['player_cards']]
+    if not sessionStorage[user_id]['player_gives']:
+        give_cards(res, req)
 
 
 def find_equals(card, cards_arr):
