@@ -476,6 +476,7 @@ def normalize_command(req):
         for word in words:
             req['request']['command'] = req['request']['command'].replace(word.replace('ё', 'е'),
                                                                           symbol)
+    req['request']['command'] = req['request']['command'].upper()
 
 
 if __name__ == '__main__':
