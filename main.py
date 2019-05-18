@@ -17,10 +17,10 @@ HELP_TXT = '''Дурак - это карточная игра. В ней исп�
 WHAT_CAN_YOU_DO = 'Я могу сыграть с тобой в "Дурака". Мой интеллект позволяет мне делать ' \
                   'логичные ходы - крыть и давать карты.'
 MODES = {
-    'SIMPLE': ('простой', 'в простого'),
-    'FLUSH': ('подкидной', 'в подкидного'),
-    'TRANSFERABLE': ('переводной', 'в переводного'),
-    'TWO_TRUMPS': ('двойной козырь', 'с двойным козырем', 'два козыря', 'с двумя козырями')
+    'SIMPLE': ('простой', 'простого'),
+    'FLUSH': ('подкидной', 'подкидного'),
+    # 'TRANSFERABLE': ('переводной', 'в переводного'),
+    # 'TWO_TRUMPS': ('двойной козырь', 'с двойным козырем', 'два козыря', 'с двумя козырями')
 }
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -80,33 +80,26 @@ def handle_dialog(res, req):
             res['response']['text'] = 'Надеюсь, было весело. Пока.'
             res['response']['end_session'] = True
         elif not sessionStorage[user_id]['game_started']:
-            if 'mode' not in sessionStorage[user_id]:
+            if not sessionStorage[user_id].get('choose_mode', False):
                 # игра не начата, значит мы ожидаем ответ на предложение сыграть.
                 if any(word in req['request']['nlu']['tokens'] for word in ['играть', 'давай', 'да',
                                                                             'поехали', 'ладно', 'старт',
                                                                             'ок', 'хорошо', 'запуск',
                                                                             'запускай']):
                     res['response']['text'] = 'Выбери режим игры'
-                    res['response']['buttons'] = [
-                        {
-                            'title': MODES[mode][0].capitalize(),
-                            'hide': True
-                        } for mode in MODES
-                    ]
-                    sessionStorage[user_id]['mode'] = None
+                    sessionStorage[user_id]['choose_mode'] = True
                 else:
                     res['response']['text'] = 'Не поняла ответа!'
-            elif sessionStorage[user_id]['mode'] is None:
+            elif sessionStorage[user_id]['choose_mode'] and not sessionStorage[user_id].get('mode', False):
                 for mode in MODES:
                     if any(word in req['request']['nlu']['tokens'] for word in MODES[mode]):
                         sessionStorage[user_id]['choose_mode'] = False
+                        sessionStorage[user_id]['game_started'] = True
                         sessionStorage[user_id]['mode'] = mode
 
                         distribution(user_id, res, req)
                         return
                 res['response']['text'] = 'Такого режима нет'
-            else:
-                res['response']['text'] = 'Режим уже выбран'
         else:
             if any(word in req['request']['nlu']['tokens'] for word in ['козырь', 'козырная',
                                                                         'какой', 'какая']):
@@ -130,7 +123,14 @@ def add_default_buttons(res, user_id):
             if len(sessionStorage[user_id]['on_table']) > 1:
                 res['response']['buttons'].append({'title': 'Сброс', 'hide': True})
             res['response']['buttons'].append({'title': 'Взять', 'hide': True})
-
+    else:
+        if sessionStorage[user_id].get('choose_mode', False):
+            res['response']['buttons'] = [
+                {
+                    'title': MODES[mode][0].capitalize(),
+                    'hide': True
+                } for mode in MODES
+            ]
     for button in ['Помощь', 'Что ты умеешь?']:
         button_dict = {'title': button, 'hide': True}
         if button_dict not in res['response']['buttons']:
@@ -166,10 +166,15 @@ def play_game(res, req):
             cover_cards(res, req)
             return
         try:
-            card = Card(req['request']['command'][:-1],
-                        game_info['suits'][req['request']['command'][-1]])
+            # command = req['request']['command']
+            command = req['request']['original_utterance']
+            card = Card(command[:-1],
+                        game_info['suits'][command[-1]])
+            logging.info(f"PLAYER GIVES {command}, "
+                         f"that {card.get_value()} {card.get_suit_name()}")
         except Exception:
             card = None
+
         if card in game_info['player_cards']:
             if not game_info['on_table'] or list(game_info['on_table'])[0].equal(card):
                 game_info['on_table'][card] = None
@@ -220,8 +225,12 @@ def play_game(res, req):
                                                                      game_info['player_cards']))]
         else:
             try:
-                card = Card(req['request']['command'][:-1],
-                            game_info['suits'][req['request']['command'][-1]])
+                # command = req['request']['command']
+                command = req['request']['original_utterance']
+                card = Card(command[:-1],
+                            game_info['suits'][command[-1]])
+                logging.info(f"PLAYER COVERS by {req['request']['command']}, "
+                             f"that {card.get_value()} {card.get_suit_name()}")
             except Exception:
                 card = None
 
@@ -270,7 +279,7 @@ def play_game(res, req):
                                 find_bigger(remain[0], game_info['player_cards']))]
                 else:
                     res['response']['text'] = f'Эта карта не может покрыть ' \
-                        f'{game_info["covering_card"]}'
+                        f'{game_info["covering_card"]}' + str(card)
             else:
                 res['response']['text'] = 'Такой карты нет'
                 if len(game_info['on_table']) > 1 and game_info['covering_card'] is None:
@@ -414,7 +423,6 @@ def check_win(res, req):
 
 
 def distribution(user_id, res, req):
-    sessionStorage[user_id]['game_started'] = True
     sessionStorage[user_id]['suits'] = {s: Suit(s) for s in SUITS}
 
     game_deck = [Card(v, s) for v in VALUES
