@@ -197,6 +197,8 @@ def play_game(res, req):
                                                   sort_cards(equal_cards) + ['Не добавлять']]
                 else:
                     cover_cards(res, req)
+            else:
+                res['response']['text'] = 'Эту карту нельзя добавить.'
         else:
             res['response']['text'] = 'Такой карты нет. Все ваши карты находятся внизу. Не забывайте, что кнопки можно листать.'
 
