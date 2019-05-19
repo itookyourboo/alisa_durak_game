@@ -9,8 +9,8 @@ from strings import *
 MODE_SIMPLE = 'SIMPLE'
 MODE_FLUSH = 'FLUSH'
 MODES = {
-    MODE_SIMPLE: ('простой', 'простого'),
     MODE_FLUSH: ('подкидной', 'подкидного'),
+    MODE_SIMPLE: ('простой', 'простого')
     # 'TRANSFERABLE': ('переводной', 'в переводного'),
     # 'TWO_TRUMPS': ('двойной козырь', 'с двойным козырем', 'два козыря', 'с двумя козырями')
 }
@@ -104,7 +104,6 @@ def handle_dialog(res, req):
 
 
 def add_default_buttons(res, user_id):
-    logging.info('ADD DEFAULT BUTTONS')
     if 'buttons' in res['response']:
         sessionStorage[user_id]['last_buttons'] = deepcopy(res['response']['buttons'])
     else:
@@ -171,7 +170,6 @@ def play_game(res, req):
 
         if card in game_info['player_cards']:
             flush_condition = not game_info['table_cash']
-            logging.info(f'FLUSH CONDITION {flush_condition}')
             if (game_info['mode'] == MODE_SIMPLE and (not game_info['on_table'] or list(game_info['on_table'])[0].equal(card))) or \
                     (game_info['mode'] == MODE_FLUSH and (flush_condition or can_flush(game_info['table_cash'], card))):
                 game_info['on_table'][card] = None
@@ -228,8 +226,6 @@ def play_game(res, req):
                 command = req['request']['original_utterance']
                 card = Card(command[:-1],
                             game_info['suits'][command[-1]])
-                logging.info(f"PLAYER COVERS by {req['request']['command']}, "
-                             f"that {card.get_value()} {card.get_suit_name()}")
             except Exception:
                 card = None
 
@@ -323,8 +319,9 @@ def give_cards(res, req):
                                       sort_cards(find_bigger(list(game_info['on_table'])[0],
                                                              game_info['player_cards']))]
 
-    game_info['player_gives'] = False
-    game_info['table_cash'].clear()
+    if not game_info['mode'] == MODE_FLUSH or not find_flush(game_info['table_cash'], game_info['player_cards']):
+        game_info['player_gives'] = False
+        game_info['table_cash'].clear()
 
 
 def cover_cards(res, req):
@@ -380,7 +377,6 @@ def cover_cards(res, req):
     flush_give = False
     if game_info['mode'] == MODE_FLUSH:
         flush = find_flush(game_info['on_table'], game_info['player_cards'])
-        logging.info(flush)
         if flush:
             res['response']['text'] += WILL_YOU_ADD
             res['response']['buttons'] = [{'title': str(c), 'hide': True} for c in
@@ -483,8 +479,6 @@ def can_flush(on_table, card):
 
 def find_flush(on_table, cards_arr):
     result = []
-    logging.info(on_table)
-    logging.info(cards_arr)
     for covered, covering in on_table.items():
         covered_equal = find_equals(covered, cards_arr)
         covering_equal = find_equals(covering, cards_arr)
