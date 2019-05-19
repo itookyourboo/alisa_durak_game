@@ -481,7 +481,7 @@ def sort_cards(cards_arr):
 
 def normalize_tts(res):
     res['response']['tts'] = res['response']['text'].\
-        replace(HELLO_TXT, HELP_TTS).\
+        replace(HELLO_TXT, HELLO_TTS).\
         replace(HELP_TXT, HELP_TTS).\
         replace(RULES_TXT, RULES_TTS).\
         replace(WHAT_CAN_YOU_DO, WHAT_CAN_YOU_DO_TTS).\
