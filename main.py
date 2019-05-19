@@ -146,13 +146,19 @@ def is_humane_first(alice_cards, player_cards):
         player_max_card = max(player_cards)
         if alice_max_card == player_max_card:
             return f'{COIN}, выпал{choice("а решка", " орел")}.', choice([False, True])
-        return f'{NO_TRUMPS} - {alice_max_card}.', alice_max_card < player_max_card
+        return f'{NO_TRUMPS} - {alice_max_card}', alice_max_card < player_max_card
 
 
 def play_game(res, req):
     game_info = sessionStorage[req['session']['user_id']]
+    logging.info(req['request']['original_utterance'])
+    logging.info(game_info['player_gives'])
     if game_info['player_gives']:
         # Тут игрок кидает карты Алисе
+        if req['request']['original_utterance'].lower() in BITO \
+                and game_info['mode'] == MODE_FLUSH:
+            cover_cards(res, req)
+            return
         if (req['request']['original_utterance'].lower() == 'не добавлять' or 'не' in
             req['request']['original_utterance'].lower()) and game_info['on_table']:
             cover_cards(res, req)
@@ -366,13 +372,23 @@ def cover_cards(res, req):
             return
     res['response']['text'] = ' '.join(map(str, game_info['on_table'].values())) + \
                               '\n'
+    flush_give = False
+    if game_info['mode'] == MODE_FLUSH:
+        flush = find_flush(game_info['on_table'], game_info['player_cards'])
+        logging.info(flush)
+        if flush:
+            res['response']['text'] += WILL_YOU_ADD
+            res['response']['buttons'] = [{'title': str(c), 'hide': True} for c in
+                                          sort_cards(flush)]
+            res['response']['buttons'].append({'title': 'Бито', 'hide': True})
+        else:
+            flush_give = True
+
     if take_new_cards(res, req, [game_info['player_cards'], game_info['alice_cards']]):
         return
-    if game_info['mode'] == MODE_SIMPLE:
+
+    if game_info['mode'] == MODE_SIMPLE or flush_give:
         give_cards(res, req)
-    # elif game_info['mode'] == MODE_FLUSH:
-    #     if find_flush(game_info['on_table'], game_info['player_cards']):
-    #         res['response']['text'] = WILL_YOU_ADD
 
 
 def take_new_cards(res, req, takers):
@@ -437,9 +453,10 @@ def distribution(user_id, res, req):
          ALISAS_MOVE))
     res['response']['buttons'] = [{'title': str(card), 'hide': True} for card in
                                   sessionStorage[user_id]['player_cards']]
+
     if not sessionStorage[user_id]['player_gives']:
         give_cards(res, req)
-        add_default_buttons(res, user_id)
+    add_default_buttons(res, user_id)
 
 
 def find_equals(card, cards_arr):
@@ -455,11 +472,14 @@ def find_bigger(card, cards_arr):
 
 def find_flush(on_table, cards_arr):
     result = []
+    logging.info(on_table)
+    logging.info(cards_arr)
     for covered, covering in on_table.items():
         covered_equal = find_equals(covered, cards_arr)
         covering_equal = find_equals(covering, cards_arr)
         [result.append(i) for i in covered_equal + covering_equal]
     return list(set(result))
+
 
 def sort_cards(cards_arr):
     # сортировка карт
@@ -467,7 +487,7 @@ def sort_cards(cards_arr):
 
 
 def normalize_tts(res):
-    res['response']['tts'] = res['response']['text'].replace('\n', '\n ')
+    res['response']['tts'] = res['response'].get('text', '').replace('\n', '\n ')
     for source, dest in STRINGS_TO_SPEECH:
         res['response']['tts'] = res['response']['tts'].replace(source, dest)
 
