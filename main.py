@@ -171,7 +171,8 @@ def add_default_buttons(res, user_id):
         if not sessionStorage[user_id]['player_gives']:
             if len(sessionStorage[user_id]['on_table']) > 1:
                 res['response']['buttons'].append({'title': 'Сброс', 'hide': True})
-            res['response']['buttons'].append({'title': 'Взять', 'hide': True})
+            if {'title': 'Взять', 'hide': True} not in res['response']['buttons']:
+                res['response']['buttons'].append({'title': 'Взять', 'hide': True})
 
     for button in ['Правила', 'Помощь', 'Что ты умеешь?']:
         button_dict = {'title': button, 'hide': True}
@@ -261,7 +262,7 @@ def play_game(res, req):
                 res['response']['buttons'] = static_buttons + \
                                              [{'title': str(btn), 'hide': True} for btn in
                                               sort_cards(find_bigger(list(game_info['on_table'])[0],
-                                                                     game_info['player_cards']))]
+                                                                     game_info['player_cards'], req))]
         else:
             try:
                 card = Card(req['request']['original_utterance'][:-1],
@@ -276,7 +277,7 @@ def play_game(res, req):
                 res['response']['text'] = f'Выбрана карта {card}. Чем будете крыть?'
                 res['response']['buttons'] = [{'title': str(c), 'hide': True} for c in
                                               sort_cards(find_bigger(card,
-                                                                     game_info['player_cards']))]
+                                                                     game_info['player_cards'], req))]
             elif card in game_info['player_cards'] and game_info['covering_card'] is not None:
                 if card.can_beat(game_info['covering_card']):
                     if game_info['on_table'][game_info['covering_card']] is not None:
@@ -306,13 +307,13 @@ def play_game(res, req):
                                                       sort_cards(find_bigger(list(
                                                           game_info['on_table'])[0],
                                                                              game_info[
-                                                                                 'player_cards']))]
+                                                                                 'player_cards'], req))]
                     else:
                         game_info['covering_card'] = remain[0]
                         res['response']['text'] = f'Осталось покрыть {remain[0]}'
                         res['response']['buttons'] = [{'title': str(c), 'hide': True}
                                                       for c in sort_cards(
-                                find_bigger(remain[0], game_info['player_cards']))]
+                                find_bigger(remain[0], game_info['player_cards'], req))]
                 else:
                     res['response']['text'] = f'Эта карта не может покрыть ' \
                         f'{game_info["covering_card"]}'
@@ -323,6 +324,12 @@ def play_game(res, req):
                                   'Просто нажмите на любую карту, прикрепленную к этому сообщению, или назовите ее голосом :)'
                 else:
                     res['response']['text'] = 'Такой карты нет. Все ваши карты находятся внизу. Не забывайте, что кнопки можно листать, а ещё вы можете "взять" карты.'
+
+    if 'screen' not in req['meta']['interfaces']:
+        if req['request']['command'].lower() == 'карты':
+            add_default_buttons(res, user_id=req['session']['user_id'])
+            btns = [a['title'] for a in res['response']['buttons']]
+            res['response']['text'] = ', '.join(list(filter(lambda x: any(c in x for c in SUITS), btns)))
 
 
 def give_cards(res, req):
@@ -357,13 +364,13 @@ def give_cards(res, req):
                                       for card in list(game_info['on_table'])] + \
                                      [{'title': str(btn), 'hide': True} for btn in sort_cards(
                                          find_bigger(list(game_info['on_table'])[0],
-                                                     game_info['player_cards']))]
+                                                     game_info['player_cards'], req))]
     else:
         game_info['covering_card'] = list(game_info['on_table'])[0]
 
         res['response']['buttons'] = [{'title': str(c), 'hide': True} for c in
                                       sort_cards(find_bigger(list(game_info['on_table'])[0],
-                                                             game_info['player_cards']))]
+                                                             game_info['player_cards'], req))]
 
     # res['response']['buttons'] += [{'title': 'Взять', 'hide': True}]
     game_info['player_gives'] = False
@@ -468,10 +475,9 @@ def find_equals(card, cards_arr):
     return [c for c in cards_arr if card.equal(c)]
 
 
-def find_bigger(card, cards_arr):
+def find_bigger(card, cards_arr, req):
     # заглушка, так как эта функция использовалась везде, но потом потеряла актуальность)
-    return cards_arr
-    # return [c for c in cards_arr if c.can_beat(card)]
+    return cards_arr if 'session' in req['meta']['interfaces'] else [c for c in cards_arr if c.can_beat(card)]
 
 
 def sort_cards(cards_arr):
