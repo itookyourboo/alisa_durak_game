@@ -170,9 +170,12 @@ def play_game(res, req):
             card = None
 
         if card in game_info['player_cards']:
+            flush_condition = not game_info['table_cash']
+            logging.info(f'FLUSH CONDITION {flush_condition}')
             if (game_info['mode'] == MODE_SIMPLE and (not game_info['on_table'] or list(game_info['on_table'])[0].equal(card))) or \
-                    (game_info['mode'] == MODE_FLUSH and (not game_info['table_cash'] or can_flush(game_info['table_cash'], card))):
+                    (game_info['mode'] == MODE_FLUSH and (flush_condition or can_flush(game_info['table_cash'], card))):
                 game_info['on_table'][card] = None
+                game_info['table_cash'][card] = None
                 game_info['player_cards'].remove(card)
                 equal_cards = find_equals(list(game_info['on_table'])[0], game_info['player_cards'])
                 # добавление нескольких карт
@@ -321,6 +324,7 @@ def give_cards(res, req):
                                                              game_info['player_cards']))]
 
     game_info['player_gives'] = False
+    game_info['table_cash'].clear()
 
 
 def cover_cards(res, req):
@@ -464,7 +468,7 @@ def distribution(user_id, res, req):
 
 def find_equals(card, cards_arr):
     # возвращает массив карт с одинаковым достоинством
-    return [c for c in cards_arr if card.equal(c)]
+    return [c for c in cards_arr if c is not None and card is not None and card.equal(c)]
 
 
 def find_bigger(card, cards_arr):
