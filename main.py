@@ -6,9 +6,11 @@ from random import shuffle, choice
 from copy import deepcopy
 from strings import *
 
+MODE_SIMPLE = 'SIMPLE'
+MODE_FLUSH = 'FLUSH'
 MODES = {
-    'SIMPLE': ('простой', 'простого'),
-    'FLUSH': ('подкидной', 'подкидного'),
+    MODE_SIMPLE: ('простой', 'простого'),
+    MODE_FLUSH: ('подкидной', 'подкидного'),
     # 'TRANSFERABLE': ('переводной', 'в переводного'),
     # 'TWO_TRUMPS': ('двойной козырь', 'с двойным козырем', 'два козыря', 'с двумя козырями')
 }
@@ -102,6 +104,7 @@ def handle_dialog(res, req):
 
 
 def add_default_buttons(res, user_id):
+    logging.info('ADD DEFAULT BUTTONS')
     if 'buttons' in res['response']:
         sessionStorage[user_id]['last_buttons'] = deepcopy(res['response']['buttons'])
     else:
@@ -121,6 +124,7 @@ def add_default_buttons(res, user_id):
                     'hide': True
                 } for mode in MODES
             ]
+
     for button in ['Помощь', 'Что ты умеешь?']:
         button_dict = {'title': button, 'hide': True}
         if button_dict not in res['response']['buttons']:
@@ -158,8 +162,6 @@ def play_game(res, req):
             command = req['request']['original_utterance']
             card = Card(command[:-1],
                         game_info['suits'][command[-1]])
-            logging.info(f"PLAYER GIVES {command}, "
-                         f"that {card.get_value()} {card.get_suit_name()}")
         except Exception:
             card = None
 
@@ -222,7 +224,6 @@ def play_game(res, req):
                 card = None
 
             # реализация крытия карт игроком
-
             if card in game_info['on_table']:
                 game_info['covering_card'] = card
                 res['response']['text'] = f'{CHOOSED_CARD} {card}. {WHAT_TO_COVER}'
@@ -317,7 +318,6 @@ def give_cards(res, req):
 
 def cover_cards(res, req):
     # Функция будет крыть карты игрока и вызывать give_cards или брать карты
-    # TODO: исправить баг с кнопками
     user_id = req['session']['user_id']
     game_info = sessionStorage[user_id]
     for covering_card in game_info['on_table']:
@@ -368,7 +368,11 @@ def cover_cards(res, req):
                               '\n'
     if take_new_cards(res, req, [game_info['player_cards'], game_info['alice_cards']]):
         return
-    give_cards(res, req)
+    if game_info['mode'] == MODE_SIMPLE:
+        give_cards(res, req)
+    # elif game_info['mode'] == MODE_FLUSH:
+    #     if find_flush(game_info['on_table'], game_info['player_cards']):
+    #         res['response']['text'] = WILL_YOU_ADD
 
 
 def take_new_cards(res, req, takers):
@@ -435,6 +439,7 @@ def distribution(user_id, res, req):
                                   sessionStorage[user_id]['player_cards']]
     if not sessionStorage[user_id]['player_gives']:
         give_cards(res, req)
+        add_default_buttons(res, user_id)
 
 
 def find_equals(card, cards_arr):
@@ -447,6 +452,14 @@ def find_bigger(card, cards_arr):
     return cards_arr
     # return [c for c in cards_arr if c.can_beat(card)]
 
+
+def find_flush(on_table, cards_arr):
+    result = []
+    for covered, covering in on_table.items():
+        covered_equal = find_equals(covered, cards_arr)
+        covering_equal = find_equals(covering, cards_arr)
+        [result.append(i) for i in covered_equal + covering_equal]
+    return list(set(result))
 
 def sort_cards(cards_arr):
     # сортировка карт
@@ -467,11 +480,7 @@ def normalize_tts(res):
 def normalize_command(req):
     req['request']['command'] = ''.join(
         req['request']['command'].lower().replace('.', '').strip().split()).replace('ё', 'е')
-    to_replace = {'♥': ['червы', 'черви', 'лиры', 'любовные', 'сердце'],
-                  '♣': ['трефы', 'крести', 'кресты', 'жёлуди'],
-                  '♦': ['бубны', 'буби', 'бубни', 'даки', 'звонки', 'ромби'],
-                  '♠': ['пики', 'вини', 'вины', 'виньни', 'бурячок']}
-    for symbol, words in {**to_replace, **value_names}.items():
+    for symbol, words in {**SUITS_TO_REPLACE, **value_names}.items():
         for word in words:
             req['request']['command'] = req['request']['command'].replace(word.replace('ё', 'е'),
                                                                           symbol)
