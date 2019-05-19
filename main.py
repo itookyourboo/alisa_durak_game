@@ -5,20 +5,48 @@ import json
 from random import shuffle, choice
 from copy import deepcopy
 
-HELP_TXT = '''Дурак - это карточная игра. В ней используется колода из 36 карт.
+HELLO_TXT = '''Привет! Давайте сыграем в "Дурака". 
+Для управления используйте кнопки или называйте карты голосом. Например, скажите "король черви" и я вас пойму.
+Ваши карты отображаются внизу.
+Вы можете "взять" карту или узнать, какой "козырь", сказав соответствующие слова в кавычках или нажав кнопки.
+Не забывайте, что кнопки можно листать вправо-влево. Выберите действие'''
+
+HELLO_TTS = '''Привет! Давайте сыграем в "Дурака". 
+Для управления используйте кнопки или называйте карты голосом. Например, скажите "король черви" и я вас пойму.
+Ваши карты отображаются внизу.
+Вы можете "взять" карту или узнать, какой "козырь", сказав соответствующие слова в кавычках или нажав кнопки.
+Не забывайте, что кнопки можно листать вправо-влево. Выберите действие'''
+
+RULES_TXT = '''Дурак - это карточная игра. В ней используется колода из 36 карт.
 Каждая карта имеет масть (♥, ♣, ♦, ♠) и достоинство (6, 7, 8, 9, 10, В, Д, К, Т).
 Карта высшего достоинства может покрыть любую карту низшего достоинства, если они одной масти.
 В начале игры выбирается козырь - масть, обладающая особой силой, стоящая над другими.
 Козырная карта может покрыть любую карту иной масти.
+Мы играем в простого дурака - за один ход можно дать одну или несколько карт одного достоинства.'''
 
-Мы играем в простого дурака - за один ход можно дать одну или несколько карт одного достоинства.
-Для управления используйте кнопки или голос. Например, скажите "король черви" и я вас пойму.
+RULES_TTS = '''Дурак - это карточная игра. В ней - используется колода из 36 карт.
+Каждая карта имеет масть (ч+ерви, кр+ести, б+уби, в+ини) - и дост+оинство - (от шестёрки до туза). -
+Карта высшего достоинства может покрыть любую карту низшего достоинства, - если они одной масти.
+В начале игр+ы выбирается козырь - масть, обладающая особой силой, - стоящая над другими. -
+Козырн+ая карта может покрыть любую карту иной масти.
+Мы играем в простого дурака - за один ход можно дать одну или несколько карт одного достоинства.'''
+
+HELP_TXT = '''Для управления используйте кнопки или голос. Например, скажите "король черви" и я вас пойму.
 Вы можете "взять" карту или узнать, какой "козырь", сказав соответствующие слова в кавычках или нажав кнопки.
 Не забывайте, что кнопки можно листать вправо-влево.
 Ну что, поехали?'''
 
+HELP_TTS = '''Для управления используйте кнопки - или голос. Например, скажите "король черви" - и я вас пойму.
+Вы можете "взять" карту или узнать, какой "козырь", сказав соответствующие слова в кавычках или нажав кнопки.
+Не забывайте, что кнопки можно листать вправо-влево.
+Ну что. Поехали?'''
+
 WHAT_CAN_YOU_DO = 'Я могу сыграть с тобой в "Дурака". Мой интеллект позволяет мне делать ' \
                   'логичные ходы - крыть и давать карты. Я умею распознавать команды, сказанные голосом, например, "король черви".'
+
+WHAT_CAN_YOU_DO_TTS = 'Я могу сыграть с тобой в "Дурака". Мой интеллект позволяет мне делать ' \
+                  'логичные ходы - крыть и давать карты. Я умею распознавать команды, сказанные голосом, например, - "король черви".'
+
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 sessionStorage = {}
@@ -47,11 +75,7 @@ def main():
 def handle_dialog(res, req):
     user_id = req['session']['user_id']
     if req['session']['new']:
-        res['response']['text'] = 'Привет! Давайте сыграем в "Дурака". ' \
-                                  'Для управления используйте кнопки или называйте карты голосом. Например, скажите "король черви" и я вас пойму. ' \
-                                  'Ваши карты отображаются внизу. ' \
-                                  'Вы можете "взять" карту или узнать, какой "козырь", сказав соответствующие слова в кавычках или нажав кнопки. ' \
-                                  'Не забывайте, что кнопки можно листать вправо-влево. Выберите действие'
+        res['response']['text'] = HELLO_TXT
         res['response']['buttons'] = [
             {
                 'title': 'Играть',
@@ -69,8 +93,11 @@ def handle_dialog(res, req):
     else:
         # В sessionStorage[user_id]['game_started'] хранится True или False в зависимости от того,
         # начал пользователь игру или нет.
-        if any(word in req['request']['nlu']['tokens'] for word in ['помощь', 'правила', 'помоги']):
+        if any(word in req['request']['nlu']['tokens'] for word in ['помощь', 'помоги']):
             res['response']['text'] = HELP_TXT
+            res['response']['tts'] = HELP_TTS
+        elif any(word in req['request']['nlu']['tokens'] for word in ['правила', 'как']):
+            res['response']['text'] = RULES_TXT
         # выйти из игры
         elif any(word in req['request']['nlu']['tokens'] for word in ['умеешь', 'делать', 'можешь',
                                                                       'что']):
@@ -121,7 +148,7 @@ def handle_dialog(res, req):
 
             # показать игроку сообщение с помощью
             else:
-                res['response']['text'] = 'Не поняла ответа!'
+                res['response']['text'] = choice('Не поняла ответа!', 'Не понимаю, о чем вы!', 'Попробуйте ещё раз!')
         else:
             if any(word in req['request']['nlu']['tokens'] for word in ['козырь', 'козырная',
                                                                         'какой', 'какая']):
@@ -146,7 +173,7 @@ def add_default_buttons(res, user_id):
                 res['response']['buttons'].append({'title': 'Сброс', 'hide': True})
             res['response']['buttons'].append({'title': 'Взять', 'hide': True})
 
-    for button in ['Помощь', 'Что ты умеешь?']:
+    for button in ['Правила', 'Помощь', 'Что ты умеешь?']:
         button_dict = {'title': button, 'hide': True}
         if button_dict not in res['response']['buttons']:
             res['response']['buttons'].append(button_dict)
@@ -192,13 +219,13 @@ def play_game(res, req):
                 equal_cards = find_equals(list(game_info['on_table'])[0], game_info['player_cards'])
                 # добавление нескольких карт
                 if equal_cards and len(game_info['alice_cards']) > len(game_info['on_table']):
-                    res['response']['text'] = 'Добавите еще карту?'
+                    res['response']['text'] = add()
                     res['response']['buttons'] = [{'title': str(card), 'hide': True} for card in
                                                   sort_cards(equal_cards) + ['Не добавлять']]
                 else:
                     cover_cards(res, req)
             else:
-                res['response']['text'] = 'Эту карту нельзя добавить.'
+                res['response']['text'] = choice('Эту карту нельзя добавить.', 'Нельзя добавить эту карту.')
         else:
             res['response']['text'] = 'Такой карты нет. Все ваши карты находятся внизу. Не забывайте, что кнопки можно листать.'
 
@@ -262,7 +289,7 @@ def play_game(res, req):
                               if c is None]
                     if not remain:
 
-                        res['response']['text'] = 'Бито. Ваш ход.'
+                        res['response']['text'] = f'Бито. {next()}'
                         game_info['player_gives'] = True
                         if take_new_cards(res, req,
                                           [game_info['alice_cards'], game_info['player_cards']]):
@@ -321,7 +348,7 @@ def give_cards(res, req):
         game_info['on_table'] = {key: None for key in sort_cards(cards)[:min(p_len, len(cards))]}
 
     [game_info['alice_cards'].remove(card) for card in game_info['on_table']]
-    res['response']['text'] = res['response'].get('text', '') + 'Кройте: ' + ', '.join(
+    res['response']['text'] = res['response'].get('text', '') + cover() + ': ' + ', '.join(
         map(str, game_info['on_table'])) + '.\n'
     if len(game_info['on_table']) > 1:
         res['response'][
@@ -364,7 +391,7 @@ def cover_cards(res, req):
                     game_info['alice_cards'].remove(card)
                 # иначе берём
                 else:
-                    res['response']['text'] = 'Беру. '
+                    res['response']['text'] = take()
                     game_info['alice_cards'] += [i for item in game_info['on_table'].items()
                                                  for i in item if i is not None]
                     if take_new_cards(res, req, [game_info['player_cards']]):
@@ -380,7 +407,7 @@ def cover_cards(res, req):
                 game_info['alice_cards'].remove(card)
         # если нечем отбиваться, берём карты
         else:
-            res['response']['text'] = 'Беру. '
+            res['response']['text'] = take()
             game_info['alice_cards'] += [i for item in game_info['on_table'].items() for i in item
                                          if i is not None]
             if take_new_cards(res, req, [game_info['player_cards']]):
@@ -415,13 +442,13 @@ def check_win(res, req):
         return False
     res['response']['text'] = res['response'].get('text', '').replace('Бито. Ваш ход.', 'Бито.')
     if not (game_info['alice_cards'] or game_info['player_cards']):
-        res['response']['text'] += '\nНичья!'
+        res['response']['text'] += '\n' + draw()
     elif not game_info['alice_cards']:
-        res['response']['text'] += '\nЯ победила!'
+        res['response']['text'] += '\n' + lose()
     elif not game_info['player_cards']:
-        res['response']['text'] += '\nВы победили!'
+        res['response']['text'] += '\n' + win()
     logging.info('Победитель: ' + res['response']['text'])
-    res['response']['text'] += '\nСыграем еще раз?'
+    res['response']['text'] += '\n' + again()
     res['response']['buttons'] = [
         {
             'title': 'Играть',
@@ -453,7 +480,12 @@ def sort_cards(cards_arr):
 
 
 def normalize_tts(res):
-    res['response']['tts'] = res['response']['text'].replace('\n', '\n ')
+    res['response']['tts'] = res['response']['text'].\
+        replace(HELLO_TXT, HELP_TTS).\
+        replace(HELP_TXT, HELP_TTS).\
+        replace(RULES_TXT, RULES_TTS).\
+        replace(WHAT_CAN_YOU_DO, WHAT_CAN_YOU_DO_TTS).\
+        replace('\n', '\n ')
     for comb in combs:
         if comb not in res['response']['tts']:
             continue
@@ -474,6 +506,40 @@ def normalize_command(req):
                 word.replace('ё', 'е'),
                 symbol)
     req['request']['original_utterance'] = req['request']['original_utterance'].upper()
+
+
+
+def next():
+    return choice(['Ваш ход.', 'Ваша очередь.', 'Ходите.'])
+
+
+def add():
+    return choice(['Добавите ещё?', 'Добавите ещё карту?', 'Хотите добавить ещё?'])
+
+
+def take():
+    return choice(['Беру.', 'Взяла.', 'Пожалуй, возьму.', 'Возьму себе.'])
+
+
+def draw():
+    return choice(['Ничья!', 'Победила дружба!', 'Вничью!', 'Мы победили друг друга!'])
+
+
+def lose():
+    return choice(['Я победила!', 'Я выиграла!', 'Победа за мной!',
+                   'Я выиграла, жалкий людишка!'])
+
+
+def win():
+    return choice(['Вы победили!', 'Победа за вами!', 'Вы нанесли мне поражение...'])
+
+
+def again():
+    return choice(['Сыграем ещё раз?', 'Ещё разок?', 'Реванш?'])
+
+
+def cover():
+    return choice(['Кройте', 'Держите', 'Ловите', 'Вот вам', 'Принимайте', 'Отбивайтесь'])
 
 
 if __name__ == '__main__':
