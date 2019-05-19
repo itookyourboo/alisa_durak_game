@@ -139,7 +139,7 @@ def handle_dialog(res, req):
 
                 res['response']['text'] = 'Козырь: {}.\n{}, {}.\n'.format(
                     sessionStorage[user_id]["trump"], alice_trump,
-                    ("вы ходите" if sessionStorage[user_id]["player_gives"] else
+                    ("ваш ход" if sessionStorage[user_id]["player_gives"] else
                      "поэтому я хожу первой"))
                 res['response']['buttons'] = [{'title': str(card), 'hide': True} for card in
                                               sessionStorage[user_id]['player_cards']]
@@ -477,7 +477,7 @@ def find_equals(card, cards_arr):
 
 def find_bigger(card, cards_arr, req):
     # заглушка, так как эта функция использовалась везде, но потом потеряла актуальность)
-    return cards_arr if 'session' in req['meta']['interfaces'] else [c for c in cards_arr if c.can_beat(card)]
+    return (cards_arr if 'screen' in req['meta']['interfaces'] else [c for c in cards_arr if c.can_beat(card)])
 
 
 def sort_cards(cards_arr):
