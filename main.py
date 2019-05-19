@@ -183,6 +183,8 @@ def play_game(res, req):
                                                   sort_cards(equal_cards) + ['Не добавлять']]
                 else:
                     cover_cards(res, req)
+            else:
+                answer(res, CANT_ADD, CANT_ADD_TTS)
         else:
             answer(res, NO_SUCH_CARD_AGAIN, NO_SUCH_CARD_AGAIN_TTS)
 
@@ -468,6 +470,10 @@ def find_bigger(card, cards_arr):
     # заглушка, так как эта функция использовалась везде, но потом потеряла актуальность)
     return cards_arr
     # return [c for c in cards_arr if c.can_beat(card)]
+
+
+def can_flush(on_table, card):
+    return find_equals(card, on_table.keys()) or find_equals(card, on_table.values())
 
 
 def find_flush(on_table, cards_arr):
