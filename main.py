@@ -151,8 +151,6 @@ def is_humane_first(alice_cards, player_cards):
 
 def play_game(res, req):
     game_info = sessionStorage[req['session']['user_id']]
-    logging.info(req['request']['original_utterance'])
-    logging.info(game_info['player_gives'])
     if game_info['player_gives']:
         # Тут игрок кидает карты Алисе
         if req['request']['original_utterance'].lower() in BITO \
@@ -172,7 +170,8 @@ def play_game(res, req):
             card = None
 
         if card in game_info['player_cards']:
-            if not game_info['on_table'] or list(game_info['on_table'])[0].equal(card):
+            if (game_info['mode'] == MODE_SIMPLE and (not game_info['on_table'] or list(game_info['on_table'])[0].equal(card))) or \
+                    (game_info['mode'] == MODE_FLUSH and (not game_info['table_cash'] or can_flush(game_info['table_cash'], card))):
                 game_info['on_table'][card] = None
                 game_info['player_cards'].remove(card)
                 equal_cards = find_equals(list(game_info['on_table'])[0], game_info['player_cards'])
@@ -385,6 +384,7 @@ def cover_cards(res, req):
             res['response']['buttons'].append({'title': 'Бито', 'hide': True})
         else:
             flush_give = True
+        game_info['table_cash'] = deepcopy(game_info['on_table'])
 
     if take_new_cards(res, req, [game_info['player_cards'], game_info['alice_cards']]):
         return
@@ -444,6 +444,7 @@ def distribution(user_id, res, req):
     sessionStorage[user_id]['player_cards'] = sort_cards(game_deck[6:12])
     sessionStorage[user_id]['deck'] = game_deck[12:]
     sessionStorage[user_id]['on_table'] = {}
+    sessionStorage[user_id]['table_cash'] = {}
     sessionStorage[user_id]['player_gives'] = False
     sessionStorage[user_id]['covering_card'] = None
     alice_trump, sessionStorage[user_id]['player_gives'] = is_humane_first(
