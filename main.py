@@ -79,6 +79,7 @@ def handle_dialog(res, req):
                                                                             'запускай']):
                     answer(res, CHOOSE_GAMEMODE, CHOOSE_GAMEMODE_TTS)
                     sessionStorage[user_id]['choose_mode'] = True
+                    sessionStorage[user_id]['mode'] = False
                 else:
                     answer(res, NOT_UNDERSTANDABLE, NOT_UNDERSTANDABLE_TTS)
             elif sessionStorage[user_id]['choose_mode'] and not sessionStorage[user_id].get('mode', False):
@@ -169,9 +170,9 @@ def play_game(res, req):
             card = None
 
         if card in game_info['player_cards']:
-            flush_condition = not game_info['table_cash']
+            logging.info(game_info['table_cash'])
             if (game_info['mode'] == MODE_SIMPLE and (not game_info['on_table'] or list(game_info['on_table'])[0].equal(card))) or \
-                    (game_info['mode'] == MODE_FLUSH and (flush_condition or can_flush(game_info['table_cash'], card))):
+                    (game_info['mode'] == MODE_FLUSH and (not game_info['table_cash'] or can_flush(game_info['table_cash'], card))):
                 game_info['on_table'][card] = None
                 game_info['table_cash'][card] = None
                 game_info['player_cards'].remove(card)
@@ -319,7 +320,9 @@ def give_cards(res, req):
                                       sort_cards(find_bigger(list(game_info['on_table'])[0],
                                                              game_info['player_cards']))]
 
-    if not game_info['mode'] == MODE_FLUSH or not find_flush(game_info['table_cash'], game_info['player_cards']):
+    if game_info['mode'] == MODE_FLUSH and find_flush(game_info['table_cash'], game_info['player_cards']):
+        game_info['player_gives'] = True
+    else:
         game_info['player_gives'] = False
         game_info['table_cash'].clear()
 
@@ -350,6 +353,7 @@ def cover_cards(res, req):
                     res['response']['text'] = TAKE
                     game_info['alice_cards'] += [i for item in game_info['on_table'].items()
                                                  for i in item if i is not None]
+                    game_info['table_cash'].clear()
                     if take_new_cards(res, req, [game_info['player_cards']]):
                         return
                     res['response']['buttons'] = [{'title': str(c), 'hide': True} for c in
@@ -366,6 +370,7 @@ def cover_cards(res, req):
             res['response']['text'] = TAKE
             game_info['alice_cards'] += [i for item in game_info['on_table'].items() for i in item
                                          if i is not None]
+            game_info['table_cash'].clear()
             if take_new_cards(res, req, [game_info['player_cards']]):
                 return
             res['response']['buttons'] = [{'title': str(c), 'hide': True} for c in
@@ -391,6 +396,7 @@ def cover_cards(res, req):
 
     if game_info['mode'] == MODE_SIMPLE or flush_give:
         give_cards(res, req)
+        game_info['table_cash'].clear()
 
 
 def take_new_cards(res, req, takers):
